@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOLDINTEL — Explainable Commodity-Contract Intelligence Platform</title>
+  <meta name="description" content="Not another gold price dashboard. Understand why Indian gold futures contracts (GOLDM, GOLDTEN, GOLDGUINEA, GOLDPETAL) differ across size, purity, quotation basis, and liquidity.">
+  
+  <!-- Google Fonts: Inter & Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              gold: '#F59E0B',
+              'gold-light': '#FDE68A',
+              'gold-dark': '#B45309',
+              navy: '#070B14',
+              'navy-surface': '#0D1527',
+              'navy-card': '#111C38',
+              'navy-border': '#1E294A',
+              'navy-hover': '#182449',
+              cyan: '#06B6D4',
+              emerald: '#10B981',
+              rose: '#F43F5E',
+              violet: '#8B5CF6',
+              blue: '#3B82F6'
+            }
+          },
+          boxShadow: {
+            'gold-glow': '0 0 25px -5px rgba(245, 158, 11, 0.3)',
+            'cyan-glow': '0 0 25px -5px rgba(6, 182, 212, 0.3)',
+            'card-glow': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #070B14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1E294A;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #F59E0B;
+    }
+
+    /* Subtle grid background */
+    .bg-grid-pattern {
+      background-size: 32px 32px;
+      background-image: 
+        linear-gradient(to right, rgba(30, 41, 74, 0.35) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(30, 41, 74, 0.35) 1px, transparent 1px);
+    }
+
+    .glass-panel {
+      background: rgba(13, 21, 39, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(30, 41, 74, 0.8);
+    }
+
+    .glass-card {
+      background: rgba(17, 28, 56, 0.65);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .glass-card:hover {
+      border-color: rgba(245, 158, 11, 0.35);
+      box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.15);
+    }
+
+    .gold-gradient-text {
+      background: linear-gradient(135deg, #FFFBEB 0%, #FDE68A 30%, #F59E0B 70%, #D97706 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .cyan-gradient-text {
+      background: linear-gradient(135deg, #ECFEFF 0%, #67E8F9 50%, #06B6D4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.04); }
+    }
+
+    .animate-pulse-glow {
+      animation: pulse-glow 3s infinite ease-in-out;
+    }
+
+    @keyframes radar-sweep {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .radar-sweep-anim {
+      animation: radar-sweep 8s linear infinite;
+    }
+
+    /* Print styling for Evidence Report */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #evidence-report-modal, #evidence-report-modal * {
+        visibility: visible;
+      }
+      #evidence-report-modal {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white !important;
+        color: black !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-brand-navy text-slate-100 font-sans min-h-screen antialiased selection:bg-brand-gold selection:text-brand-navy bg-grid-pattern">
+
+  <!-- TOP HEADER / TELEMETRY STATUS BAR -->
+  <header class="sticky top-0 z-40 border-b border-brand-navy-border bg-brand-navy/90 backdrop-blur-md px-4 lg:px-6 py-2.5 flex items-center justify-between">
+    <!-- Brand & Live Signal -->
+    <div class="flex items-center gap-3">
+      <button onclick="navigateView('landing')" class="flex items-center gap-2.5 group text-left">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-gold to-brand-gold-dark p-0.5 flex items-center justify-center shadow-gold-glow">
+          <div class="w-full h-full bg-brand-navy rounded-[6px] flex items-center justify-center font-display font-black text-brand-gold text-base group-hover:bg-brand-navy/60 transition">
+            G
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-display font-black tracking-wider text-lg text-white">GOLD<span class="text-brand-gold">INTEL</span></span>
+            <span class="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-brand-gold border border-amber-500/30">MCX Edition</span>
+          </div>
+          <p class="text-[10px] text-slate-400 font-mono hidden sm:block">Explainable Commodity-Contract Intelligence</p>
+        </div>
+      </button>
+    </div>
+
+    <!-- Live Telemetry Status Center -->
+    <div class="hidden md:flex items-center gap-6 text-xs font-mono">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span class="text-slate-300">Feed: <strong class="text-emerald-400">MCX Bhavcopy Synced</strong></span>
+      </div>
+      <div class="flex items-center gap-1.5 text-slate-300">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-brand-cyan"></i>
+        <span>Data Quality: <strong class="text-brand-cyan">99.4% (Verified)</strong></span>
+      </div>
+      <div class="flex items-center gap-1.5 text-slate-300">
+        <i data-lucide="calendar" class="w-3.5 h-3.5 text-brand-gold"></i>
+        <span id="header-date">2026-09-25 IST</span>
+      </div>
+      <div class="flex items-center gap-1.5 text-slate-400">
+        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+        <span>Settle Cycle: <strong>EOD Bhavcopy</strong></span>
+      </div>
+    </div>
+
+    <!-- Quick Action / Judge Mode CTA -->
+    <div class="flex items-center gap-2.5">
+      <button onclick="startJudgeMode()" class="relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-500/40 border border-brand-gold/60 text-brand-gold-light font-display font-semibold text-xs tracking-wide shadow-gold-glow transition-all active:scale-95 group">
+        <span class="w-2 h-2 rounded-full bg-brand-gold animate-pulse"></span>
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-brand-gold"></i>
+        <span>JUDGE MODE (2-Min Tour)</span>
+      </button>
+
+      <button onclick="openEvidenceReportModal()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover border border-brand-navy-border text-slate-200 text-xs font-medium transition">
+        <i data-lucide="file-text" class="w-3.5 h-3.5 text-brand-cyan"></i>
+        <span>Evidence Dossier</span>
+      </button>
+
+      <!-- Mobile Menu Toggle -->
+      <button onclick="toggleMobileSidebar()" class="lg:hidden p-1.5 rounded-lg bg-brand-navy-card border border-brand-navy-border text-slate-300">
+        <i data-lucide="menu" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex min-h-[calc(100vh-53px)]">
+
+    <!-- LEFT SIDEBAR NAVIGATION -->
+    <aside id="app-sidebar" class="w-64 border-r border-brand-navy-border bg-brand-navy-surface/90 backdrop-blur-xl p-3 flex flex-col justify-between shrink-0 transition-all duration-300 fixed lg:static inset-y-0 left-0 z-30 -translate-x-full lg:translate-x-0 mt-[53px] lg:mt-0">
+      <div class="space-y-6 overflow-y-auto pr-1">
+        
+        <!-- Navigation Group: Core Laboratory -->
+        <div>
+          <p class="text-[10px] font-mono uppercase text-slate-400 px-3 mb-2 tracking-wider font-semibold">Laboratory Cockpit</p>
+          <nav class="space-y-1" id="main-nav-links">
+            <!-- Nav Item: Overview -->
+            <button onclick="navigateView('overview')" data-view="overview" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition text-left text-brand-gold bg-brand-gold/10 border border-brand-gold/30">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+              <span>Overview</span>
+            </button>
+
+            <!-- Nav Item: Contract DNA -->
+            <button onclick="navigateView('dna')" data-view="dna" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="fingerprint" class="w-4 h-4 text-amber-400"></i>
+              <span>Contract DNA</span>
+            </button>
+
+            <!-- Nav Item: Universal Gold Basis -->
+            <button onclick="navigateView('universal-basis')" data-view="universal-basis" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="scale" class="w-4 h-4 text-brand-cyan"></i>
+              <span>Universal Gold Basis</span>
+              <span class="ml-auto text-[9px] font-mono px-1 rounded bg-cyan-500/20 text-brand-cyan">UGB</span>
+            </button>
+
+            <!-- Nav Item: Relative Value Radar -->
+            <button onclick="navigateView('radar')" data-view="radar" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="radar" class="w-4 h-4 text-purple-400"></i>
+              <span>Relative Value Radar</span>
+            </button>
+
+            <!-- Nav Item: Anomaly Explorer -->
+            <button onclick="navigateView('anomalies')" data-view="anomalies" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i>
+              <span>Anomaly Explorer</span>
+              <span id="sidebar-anomaly-count" class="ml-auto text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold">2 Flagged</span>
+            </button>
+
+            <!-- Nav Item: Signature Feature: Why is this contract different? -->
+            <button onclick="navigateView('why-different')" data-view="why-different" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-brand-gold-light bg-gradient-to-r from-amber-500/10 to-transparent border border-brand-gold/20 hover:border-brand-gold/40 transition text-left">
+              <i data-lucide="help-circle" class="w-4 h-4 text-brand-gold"></i>
+              <span>Why Is This Different?</span>
+              <span class="ml-auto text-[9px] font-mono text-brand-gold">★ CORE</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Navigation Group: Deep Diagnostic Suite -->
+        <div>
+          <p class="text-[10px] font-mono uppercase text-slate-400 px-3 mb-2 tracking-wider font-semibold">Microstructure Optics</p>
+          <nav class="space-y-1">
+            <!-- Market X-Ray -->
+            <button onclick="navigateView('market-xray')" data-view="market-xray" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="layers" class="w-4 h-4 text-blue-400"></i>
+              <span>Gold Market X-Ray</span>
+            </button>
+
+            <!-- Expiry Gravity -->
+            <button onclick="navigateView('expiry-gravity')" data-view="expiry-gravity" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="orbit" class="w-4 h-4 text-emerald-400"></i>
+              <span>Expiry Gravity</span>
+            </button>
+
+            <!-- Liquidity Lens -->
+            <button onclick="navigateView('liquidity-lens')" data-view="liquidity-lens" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="droplet" class="w-4 h-4 text-cyan-400"></i>
+              <span>Liquidity Lens</span>
+            </button>
+
+            <!-- Reality Check -->
+            <button onclick="navigateView('reality-check')" data-view="reality-check" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="check-check" class="w-4 h-4 text-emerald-400"></i>
+              <span>Reality Check (Walk-Fwd)</span>
+              <span class="ml-auto text-[9px] font-mono px-1 rounded bg-emerald-500/20 text-emerald-300">Validation</span>
+            </button>
+
+            <!-- Contract Lifecycle -->
+            <button onclick="navigateView('contract-lifecycle')" data-view="contract-lifecycle" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="git-commit" class="w-4 h-4 text-indigo-400"></i>
+              <span>Contract Lifecycle</span>
+            </button>
+
+            <!-- Anomaly Memory -->
+            <button onclick="navigateView('anomaly-memory')" data-view="anomaly-memory" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="database" class="w-4 h-4 text-amber-300"></i>
+              <span>Anomaly Memory</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Navigation Group: Interactive Intelligence -->
+        <div>
+          <p class="text-[10px] font-mono uppercase text-slate-400 px-3 mb-2 tracking-wider font-semibold">Intelligence & Research</p>
+          <nav class="space-y-1">
+            <!-- What-If Lab -->
+            <button onclick="navigateView('what-if')" data-view="what-if" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="sliders" class="w-4 h-4 text-brand-gold"></i>
+              <span>What-If Lab</span>
+              <span class="ml-auto text-[9px] font-mono px-1 rounded bg-amber-500/20 text-amber-300">Interactive</span>
+            </button>
+
+            <!-- AI Analyst -->
+            <button onclick="navigateView('ai-analyst')" data-view="ai-analyst" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="bot" class="w-4 h-4 text-brand-cyan"></i>
+              <span>GOLDINTEL AI Analyst</span>
+              <span class="ml-auto text-[9px] font-mono px-1 rounded bg-cyan-500/20 text-cyan-300">Strict</span>
+            </button>
+
+            <!-- Data Provenance -->
+            <button onclick="navigateView('data-provenance')" data-view="data-provenance" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-brand-navy-card/60 transition text-left">
+              <i data-lucide="binary" class="w-4 h-4 text-slate-400"></i>
+              <span>Data Provenance & Audit</span>
+            </button>
+          </nav>
+        </div>
+
+      </div>
+
+      <!-- Sidebar Footer: Methodology Statement -->
+      <div class="pt-4 border-t border-brand-navy-border mt-3">
+        <div class="p-2.5 rounded-lg bg-brand-navy/60 border border-brand-navy-border text-[11px] text-slate-400 space-y-1">
+          <div class="flex items-center gap-1.5 font-semibold text-slate-300">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-brand-gold"></i>
+            <span>Analytical Stance</span>
+          </div>
+          <p class="leading-relaxed">Explains relative pricing differences. Zero predictions. Zero buy/sell signals.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 p-4 lg:p-8 max-w-7xl mx-auto overflow-y-auto w-full">
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 0: LANDING PAGE HERO (Cinematic Experience) -->
+      <!-- ========================================================================= -->
+      <section id="view-landing" class="view-section hidden space-y-12">
+        <!-- Hero Header -->
+        <div class="relative rounded-2xl overflow-hidden glass-panel p-8 sm:p-12 border border-brand-gold/30 shadow-2xl">
+          <!-- Background Glow Effect -->
+          <div class="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-brand-gold/10 blur-3xl pointer-events-none"></div>
+          <div class="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-brand-cyan/10 blur-3xl pointer-events-none"></div>
+
+          <div class="relative z-10 max-w-3xl space-y-6">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/40 text-brand-gold-light text-xs font-mono">
+              <i data-lucide="atom" class="w-3.5 h-3.5 animate-spin"></i>
+              <span>Explainable Commodity-Contract Intelligence Platform</span>
+            </div>
+
+            <h1 class="font-display font-black text-4xl sm:text-6xl tracking-tight text-white leading-tight">
+              Not another gold price dashboard. <br>
+              <span class="gold-gradient-text">Understand why contracts differ.</span>
+            </h1>
+
+            <p class="text-slate-300 text-base sm:text-lg leading-relaxed font-light">
+              Discover when related Indian gold futures (<strong class="text-white">GOLDM, GOLDTEN, GOLDGUINEA, GOLDPETAL</strong>) stop behaving like they should — decomposing quotation basis, fineness purity, expiry carrying cost, and order-book liquidity.
+            </p>
+
+            <div class="flex flex-wrap items-center gap-4 pt-2">
+              <button onclick="navigateView('why-different')" class="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-brand-gold to-brand-gold-dark text-brand-navy font-display font-bold text-sm tracking-wide shadow-gold-glow hover:brightness-110 active:scale-95 transition">
+                <i data-lucide="search" class="w-4 h-4"></i>
+                <span>START INVESTIGATION</span>
+              </button>
+
+              <button onclick="navigateView('anomalies')" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-navy-card hover:bg-brand-navy-hover border border-brand-navy-border text-slate-100 font-display font-semibold text-sm transition">
+                <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400"></i>
+                <span>EXPLORE ANOMALIES</span>
+              </button>
+
+              <button onclick="startJudgeMode()" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-brand-gold/40 text-brand-gold-light font-display font-semibold text-sm transition">
+                <i data-lucide="sparkles" class="w-4 h-4 text-brand-gold"></i>
+                <span>JUDGE MODE (2 MIN)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 CONTRACT DNA HERO CARDS -->
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="font-display font-bold text-xl text-white">Focus Contracts: MCX Gold Complex</h2>
+              <p class="text-xs text-slate-400 font-mono">Real contract specifications under Indian Exchange Bylaws</p>
+            </div>
+            <button onclick="navigateView('dna')" class="text-xs font-mono text-brand-gold hover:underline flex items-center gap-1">
+              <span>View Full DNA Matrix</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="hero-contract-cards">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <!-- HOW GOLDINTEL THINKS PIPELINE -->
+        <div class="glass-panel rounded-2xl p-6 sm:p-8 border border-brand-navy-border space-y-6">
+          <div class="text-center max-w-xl mx-auto space-y-2">
+            <span class="text-xs font-mono uppercase text-brand-cyan tracking-widest">Methodological Architecture</span>
+            <h2 class="font-display font-bold text-2xl text-white">How GOLDINTEL Thinks</h2>
+            <p class="text-xs text-slate-400">Transforming uncomparable multi-denomination quotes into rigorous explainable evidence.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-3 pt-4">
+            <!-- Step 1 -->
+            <div class="glass-card rounded-xl p-4 border border-brand-navy-border relative group hover:border-brand-gold/40 transition">
+              <div class="text-[10px] font-mono text-slate-400 mb-1">01 / INGESTION</div>
+              <div class="font-display font-bold text-sm text-white mb-1 flex items-center gap-1.5">
+                <i data-lucide="database" class="w-3.5 h-3.5 text-blue-400"></i>
+                <span>RAW DATA</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">MCX Bhavcopy settlement prices, trading volume, open interest, and tick spread.</p>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="glass-card rounded-xl p-4 border border-brand-navy-border relative group hover:border-brand-cyan/40 transition">
+              <div class="text-[10px] font-mono text-slate-400 mb-1">02 / STANDARDIZE</div>
+              <div class="font-display font-bold text-sm text-white mb-1 flex items-center gap-1.5">
+                <i data-lucide="scale" class="w-3.5 h-3.5 text-brand-cyan"></i>
+                <span>NORMALIZE</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Universal Gold Basis (UGB) conversion: ₹/g of 999.0 Pure Fine Gold calibration.</p>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="glass-card rounded-xl p-4 border border-brand-navy-border relative group hover:border-purple-500/40 transition">
+              <div class="text-[10px] font-mono text-slate-400 mb-1">03 / STATISTICAL</div>
+              <div class="font-display font-bold text-sm text-white mb-1 flex items-center gap-1.5">
+                <i data-lucide="git-compare" class="w-3.5 h-3.5 text-purple-400"></i>
+                <span>COMPARE</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Rolling 30-day lookback, empirical quantiles, Z-scores, and cross-correlation.</p>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="glass-card rounded-xl p-4 border border-brand-navy-border relative group hover:border-amber-500/40 transition">
+              <div class="text-[10px] font-mono text-slate-400 mb-1">04 / ATTRIBUTION</div>
+              <div class="font-display font-bold text-sm text-white mb-1 flex items-center gap-1.5">
+                <i data-lucide="microscope" class="w-3.5 h-3.5 text-brand-gold"></i>
+                <span>INVESTIGATE</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Multi-factor decomposition: Price spread, Expiry carry, Order book liquidity, Rarity.</p>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="glass-card rounded-xl p-4 border border-brand-navy-border relative group hover:border-emerald-500/40 transition">
+              <div class="text-[10px] font-mono text-slate-400 mb-1">05 / REALITY CHECK</div>
+              <div class="font-display font-bold text-sm text-white mb-1 flex items-center gap-1.5">
+                <i data-lucide="check-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span>VALIDATE</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Walk-forward friction hurdle: Exchange fees, slippage, GST to verify signal survival.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 1: OVERVIEW COCKPIT -->
+      <!-- ========================================================================= -->
+      <section id="view-overview" class="view-section space-y-6">
+        <!-- Top Banner & Filter -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Commodity Microstructure Cockpit</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Real-time relative valuation across 4 Indian Gold Futures contracts</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-slate-400">Session Date:</span>
+            <select id="overview-date-select" onchange="onDateChanged(this.value)" class="bg-brand-navy-card border border-brand-navy-border rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:border-brand-gold outline-none">
+              <!-- Populated by JS -->
+            </select>
+          </div>
+        </div>
+
+        <!-- 4 PULSE CARDS (GOLDM, GOLDTEN, GOLDGUINEA, GOLDPETAL) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="overview-pulse-cards">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- TWO COLUMN ANALYTICAL PANELS -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Relative Radar Preview & Active Divergence Ticker (2 cols) -->
+          <div class="lg:col-span-2 glass-panel rounded-2xl p-5 border border-brand-navy-border space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="radar" class="w-4 h-4 text-brand-gold"></i>
+                <h2 class="font-display font-bold text-base text-white">Relative Value Radar & Active Pair Discrepancies</h2>
+              </div>
+              <button onclick="navigateView('radar')" class="text-xs font-mono text-brand-cyan hover:underline flex items-center gap-1">
+                <span>Interactive Radar</span>
+                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+              </button>
+            </div>
+
+            <!-- Mini Radar Canvas & Live Pair Table -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              <div class="md:col-span-5 flex flex-col items-center justify-center p-3 rounded-xl bg-brand-navy/60 border border-brand-navy-border relative">
+                <canvas id="mini-radar-canvas" width="220" height="220" class="w-[200px] h-[200px]"></canvas>
+                <div class="text-[10px] font-mono text-slate-400 mt-2 text-center">4 Contracts • 6 Relative Relationships</div>
+              </div>
+
+              <div class="md:col-span-7 space-y-2" id="overview-top-pairs">
+                <!-- Top 3 Pair relationships injected via JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Anomaly Pulse & Reality Check Telemetry (1 col) -->
+          <div class="glass-panel rounded-2xl p-5 border border-brand-navy-border space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+                <h2 class="font-display font-bold text-base text-white">Surveillance Status</h2>
+              </div>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">2 Anomalous</span>
+            </div>
+
+            <div class="space-y-3" id="overview-anomaly-telemetry">
+              <!-- Telemetry items injected via JS -->
+            </div>
+
+            <div class="p-3 rounded-xl bg-brand-navy/80 border border-brand-navy-border space-y-2">
+              <div class="flex items-center justify-between text-xs font-mono">
+                <span class="text-slate-400">Walk-Forward Survivability:</span>
+                <span class="text-emerald-400 font-bold">66.7%</span>
+              </div>
+              <div class="w-full bg-brand-navy h-2 rounded-full overflow-hidden flex">
+                <div class="bg-emerald-500 h-full" style="width: 50%" title="Survives"></div>
+                <div class="bg-amber-500 h-full" style="width: 33%" title="Weakens"></div>
+                <div class="bg-rose-500 h-full" style="width: 17%" title="Disappears"></div>
+              </div>
+              <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                <span>3 Survives</span>
+                <span>2 Weakens</span>
+                <span>1 Disappears</span>
+              </div>
+            </div>
+
+            <button onclick="navigateView('why-different')" class="w-full py-2 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold-light text-xs font-semibold flex items-center justify-center gap-2 transition">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+              <span>Launch "Why Is It Different?" Engine</span>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- 30-DAY TIME SERIES CHART: UNIVERSAL GOLD BASIS -->
+        <div class="glass-panel rounded-2xl p-5 border border-brand-navy-border space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2">
+                <i data-lucide="trending-up" class="w-4 h-4 text-brand-cyan"></i>
+                <h2 class="font-display font-bold text-base text-white">Universal Gold Basis (UGB) Historical Parity Series</h2>
+              </div>
+              <p class="text-xs text-slate-400 font-mono">All contracts calibrated to ₹ per 1 gram of 999.0 Pure Fine Gold benchmark</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs font-mono">
+              <span class="inline-flex items-center gap-1 text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-400"></span> GOLDM</span>
+              <span class="inline-flex items-center gap-1 text-blue-400"><span class="w-2 h-2 rounded-full bg-blue-400"></span> GOLDTEN</span>
+              <span class="inline-flex items-center gap-1 text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> GOLDGUINEA</span>
+              <span class="inline-flex items-center gap-1 text-purple-400"><span class="w-2 h-2 rounded-full bg-purple-400"></span> GOLDPETAL</span>
+            </div>
+          </div>
+
+          <div class="h-64 sm:h-72 w-full">
+            <canvas id="ugb-history-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 2: CONTRACT DNA -->
+      <!-- ========================================================================= -->
+      <section id="view-dna" class="view-section hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Contract DNA Matrix</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">MCX Indian Gold Futures specification and structural mechanics</p>
+          </div>
+          <button onclick="navigateView('universal-basis')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-gold/15 border border-brand-gold/30 text-brand-gold-light text-xs font-semibold hover:bg-brand-gold/25 transition">
+            <i data-lucide="scale" class="w-3.5 h-3.5"></i>
+            <span>Test Normalization Engine</span>
+          </button>
+        </div>
+
+        <!-- 4 Detailed DNA Specification Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="contract-dna-container">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Comparative DNA Structural Table -->
+        <div class="glass-panel rounded-2xl p-5 border border-brand-navy-border space-y-4">
+          <h2 class="font-display font-bold text-base text-white">Microstructure Comparison Matrix</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs font-mono">
+              <thead>
+                <tr class="border-b border-brand-navy-border text-slate-400">
+                  <th class="py-2.5 px-3">Contract</th>
+                  <th class="py-2.5 px-3">Trading Unit</th>
+                  <th class="py-2.5 px-3">Delivery Purity</th>
+                  <th class="py-2.5 px-3">Quotation Basis</th>
+                  <th class="py-2.5 px-3">Tick Size</th>
+                  <th class="py-2.5 px-3">Initial Margin</th>
+                  <th class="py-2.5 px-3">Delivery Center</th>
+                  <th class="py-2.5 px-3">Delivery Form</th>
+                </tr>
+              </thead>
+              <tbody id="dna-table-body" class="divide-y divide-brand-navy-border text-slate-200">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 3: UNIVERSAL GOLD BASIS -->
+      <!-- ========================================================================= -->
+      <section id="view-universal-basis" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Universal Gold Basis (UGB) Engine</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Mathematical standardization of heterogeneous contracts to ₹/g 999.0 Pure Fine Gold</p>
+          </div>
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-cyan/10 border border-brand-cyan/30 text-brand-cyan text-xs font-mono">
+            <i data-lucide="binary" class="w-3.5 h-3.5"></i>
+            <span>Formula: UGB = (P_raw / Unit) × (0.999 / Delivery_Purity)</span>
+          </div>
+        </div>
+
+        <!-- Raw Value vs Normalized Value Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="ugb-cards-container">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Mathematical Normalization Sandbox & Live Equation Inspector -->
+        <div class="glass-panel rounded-2xl p-6 border border-brand-navy-border space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="font-display font-bold text-lg text-white">Transparent Calculation Pipeline</h2>
+              <p class="text-xs text-slate-400 font-mono">Select a contract to inspect every mathematical step in complete detail</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="ugb-contract-select" onchange="renderUgbCalculationSteps(this.value)" class="bg-brand-navy-card border border-brand-navy-border rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:border-brand-gold outline-none">
+                <option value="GOLDM">GOLDM (100g, 995)</option>
+                <option value="GOLDTEN">GOLDTEN (10g, 999)</option>
+                <option value="GOLDGUINEA">GOLDGUINEA (8g, 999)</option>
+                <option value="GOLDPETAL">GOLDPETAL (1g, 999)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Step by Step Math Container -->
+          <div id="ugb-calculation-steps-container" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 4: RELATIVE VALUE RADAR -->
+      <!-- ========================================================================= -->
+      <section id="view-radar" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Relative Value Radar</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Topological multi-node contract graph with statistical divergence classification</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs font-mono">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> NORMAL (|Z| &lt; 1.5)</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> WATCH (1.5 ≤ |Z| &lt; 2.5)</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-400 animate-pulse"></span> UNUSUAL (|Z| ≥ 2.5)</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Radar Visual Graph Canvas (7 cols) -->
+          <div class="lg:col-span-7 glass-panel rounded-2xl p-6 border border-brand-navy-border flex flex-col items-center justify-center relative min-h-[420px]">
+            <div class="absolute top-4 left-4 text-xs font-mono text-slate-400">
+              <span>Node Graph: 4 Contracts • 6 Connected Edges</span>
+            </div>
+            
+            <canvas id="interactive-radar-canvas" width="480" height="420" class="max-w-full h-auto cursor-pointer"></canvas>
+            
+            <div class="text-[11px] font-mono text-slate-400 mt-2 text-center">
+              Click any node or connection line to trigger immediate Pairwise Investigation.
+            </div>
+          </div>
+
+          <!-- Relationship Matrix Cards (5 cols) -->
+          <div class="lg:col-span-5 space-y-3">
+            <div class="flex items-center justify-between px-1">
+              <h2 class="font-display font-bold text-base text-white">All 6 Pairwise Relationships</h2>
+              <span class="text-xs font-mono text-slate-400">30d Rolling Baseline</span>
+            </div>
+
+            <div class="space-y-2.5 overflow-y-auto max-h-[480px] pr-1" id="radar-pairs-list">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 5: ANOMALY EXPLORER -->
+      <!-- ========================================================================= -->
+      <section id="view-anomalies" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Anomaly Explorer</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Automated detection and multi-factor decomposition of unusual contract pricing</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="anomaly-filter-severity" onchange="renderAnomalyExplorer()" class="bg-brand-navy-card border border-brand-navy-border rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:border-brand-gold outline-none">
+              <option value="ALL">All Severity Tiers</option>
+              <option value="UNUSUAL">Unusual Only (|Z| ≥ 2.0)</option>
+              <option value="WATCH">Watchlist (|Z| ≥ 1.5)</option>
+              <option value="NORMAL">Normal Equilibrium</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Anomaly Cards Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="anomaly-cards-grid">
+          <!-- Injected via JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 6: SIGNATURE FEATURE: WHY IS THIS CONTRACT DIFFERENT? -->
+      <!-- ========================================================================= -->
+      <section id="view-why-different" class="view-section hidden space-y-6">
+        <div class="glass-panel rounded-2xl p-6 border border-brand-gold/30 space-y-6 shadow-gold-glow">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-brand-navy-border pb-5">
+            <div>
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold text-[10px] font-mono mb-1.5 font-bold">
+                <i data-lucide="sparkles" class="w-3 h-3"></i>
+                <span>SIGNATURE EXPLAINABILITY ENGINE</span>
+              </div>
+              <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Why Is This Contract Different?</h1>
+              <p class="text-xs text-slate-300 font-mono">Deep-dive investigative breakdown between any two gold futures contracts</p>
+            </div>
+
+            <!-- Contract Selector Pair -->
+            <div class="flex items-center gap-2 bg-brand-navy/80 p-2 rounded-xl border border-brand-navy-border">
+              <select id="why-select-contract-a" onchange="runWhyDifferentInvestigation()" class="bg-brand-navy-card border border-brand-navy-border rounded-lg px-3 py-2 text-xs text-white font-mono focus:border-brand-gold outline-none">
+                <option value="GOLDM" selected>GOLDM (100g, 995)</option>
+                <option value="GOLDTEN">GOLDTEN (10g, 999)</option>
+                <option value="GOLDGUINEA">GOLDGUINEA (8g, 999)</option>
+                <option value="GOLDPETAL">GOLDPETAL (1g, 999)</option>
+              </select>
+
+              <span class="font-bold text-brand-gold font-mono text-sm">VS</span>
+
+              <select id="why-select-contract-b" onchange="runWhyDifferentInvestigation()" class="bg-brand-navy-card border border-brand-navy-border rounded-lg px-3 py-2 text-xs text-white font-mono focus:border-brand-gold outline-none">
+                <option value="GOLDM">GOLDM (100g, 995)</option>
+                <option value="GOLDTEN">GOLDTEN (10g, 999)</option>
+                <option value="GOLDGUINEA">GOLDGUINEA (8g, 999)</option>
+                <option value="GOLDPETAL" selected>GOLDPETAL (1g, 999)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Dynamic Investigation Container -->
+          <div id="why-different-results-container" class="space-y-6">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 7: GOLD MARKET X-RAY -->
+      <!-- ========================================================================= -->
+      <section id="view-market-xray" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Gold Market X-Ray</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Layered microstructure optical inspection</p>
+          </div>
+        </div>
+
+        <!-- 5 Interactive Layer Toggles -->
+        <div class="glass-panel rounded-2xl p-5 border border-brand-navy-border space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display font-bold text-base text-white">Active Diagnostic Layers</h2>
+            <span class="text-xs font-mono text-slate-400">Toggle layers to isolate drivers</span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <button onclick="toggleXrayLayer('price')" id="xray-btn-price" class="xray-toggle-btn p-3 rounded-xl bg-brand-gold/15 border border-brand-gold text-brand-gold-light text-xs font-semibold flex flex-col items-center gap-1.5 transition">
+              <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+              <span>Layer 1: Price</span>
+              <span class="text-[9px] font-mono opacity-80">ACTIVE</span>
+            </button>
+
+            <button onclick="toggleXrayLayer('mechanics')" id="xray-btn-mechanics" class="xray-toggle-btn p-3 rounded-xl bg-blue-500/15 border border-blue-400 text-blue-300 text-xs font-semibold flex flex-col items-center gap-1.5 transition">
+              <i data-lucide="sliders" class="w-4 h-4"></i>
+              <span>Layer 2: Mechanics</span>
+              <span class="text-[9px] font-mono opacity-80">ACTIVE</span>
+            </button>
+
+            <button onclick="toggleXrayLayer('liquidity')" id="xray-btn-liquidity" class="xray-toggle-btn p-3 rounded-xl bg-cyan-500/15 border border-cyan-400 text-cyan-300 text-xs font-semibold flex flex-col items-center gap-1.5 transition">
+              <i data-lucide="droplet" class="w-4 h-4"></i>
+              <span>Layer 3: Liquidity</span>
+              <span class="text-[9px] font-mono opacity-80">ACTIVE</span>
+            </button>
+
+            <button onclick="toggleXrayLayer('expiry')" id="xray-btn-expiry" class="xray-toggle-btn p-3 rounded-xl bg-purple-500/15 border border-purple-400 text-purple-300 text-xs font-semibold flex flex-col items-center gap-1.5 transition">
+              <i data-lucide="orbit" class="w-4 h-4"></i>
+              <span>Layer 4: Expiry</span>
+              <span class="text-[9px] font-mono opacity-80">ACTIVE</span>
+            </button>
+
+            <button onclick="toggleXrayLayer('historical')" id="xray-btn-historical" class="xray-toggle-btn p-3 rounded-xl bg-emerald-500/15 border border-emerald-400 text-emerald-300 text-xs font-semibold flex flex-col items-center gap-1.5 transition">
+              <i data-lucide="history" class="w-4 h-4"></i>
+              <span>Layer 5: History</span>
+              <span class="text-[9px] font-mono opacity-80">ACTIVE</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Layer Visualizer Output -->
+        <div class="glass-panel rounded-2xl p-6 border border-brand-navy-border space-y-6" id="xray-output-container">
+          <!-- Injected via JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 8: EXPIRY GRAVITY -->
+      <!-- ========================================================================= -->
+      <section id="view-expiry-gravity" class="view-section hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Expiry Gravity</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Visual contract lifecycle progression and basis roll decay</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Expiry Orbit Canvas (7 cols) -->
+          <div class="lg:col-span-7 glass-panel rounded-2xl p-6 border border-brand-navy-border flex flex-col items-center justify-center relative min-h-[400px]">
+            <canvas id="expiry-gravity-canvas" width="460" height="380" class="max-w-full h-auto"></canvas>
+            <div class="text-[11px] font-mono text-slate-400 mt-2 text-center">
+              Contracts orbit closer to the central expiry horizon as delivery notice period approaches.
+            </div>
+          </div>
+
+          <!-- Expiry Profile Table & Metrics (5 cols) -->
+          <div class="lg:col-span-5 space-y-4" id="expiry-gravity-details">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 9: LIQUIDITY LENS -->
+      <!-- ========================================================================= -->
+      <section id="view-liquidity-lens" class="view-section hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Liquidity Lens & Data Quality</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Order book depth confidence, slippage estimation, and continuous-series health</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="liquidity-cards-grid">
+          <!-- Injected via JS -->
+        </div>
+
+        <div class="glass-panel rounded-2xl p-6 border border-brand-navy-border space-y-4">
+          <h2 class="font-display font-bold text-base text-white">Volume vs Open Interest Microstructure Scatter</h2>
+          <div class="h-64 sm:h-72 w-full">
+            <canvas id="liquidity-scatter-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 10: REALITY CHECK (WALK-FORWARD VALIDATION) -->
+      <!-- ========================================================================= -->
+      <section id="view-reality-check" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Reality Check (Walk-Forward Validation)</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Empirical testing against transaction costs, exchange fees, and bid-ask slippage</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs font-mono">
+            <span class="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">SURVIVES</span>
+            <span class="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">WEAKENS</span>
+            <span class="px-2.5 py-1 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">DISAPPEARS</span>
+          </div>
+        </div>
+
+        <!-- Reality Check Explanation Banner -->
+        <div class="glass-panel rounded-2xl p-5 border border-brand-navy-border space-y-3">
+          <div class="flex items-center gap-2 text-sm font-semibold text-brand-gold">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+            <span>Walk-Forward Analytical Methodology</span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Never assume market friction is zero. Many apparent contract price differences are entirely consumed by exchange turnover charges, statutory stamp duty, and bid-ask spread slippage. GOLDINTEL subjects every relationship to a strict walk-forward cost hurdle.
+          </p>
+        </div>
+
+        <!-- 6 Pair Reality Check Validation Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="reality-check-cards-grid">
+          <!-- Injected via JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 11: CONTRACT LIFECYCLE -->
+      <!-- ========================================================================= -->
+      <section id="view-contract-lifecycle" class="view-section hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Contract Lifecycle Progression</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Behavioral stages from exchange introduction to final delivery settlement</p>
+          </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-6 border border-brand-navy-border space-y-6" id="lifecycle-container">
+          <!-- Injected via JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 12: ANOMALY MEMORY -->
+      <!-- ========================================================================= -->
+      <section id="view-anomaly-memory" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Anomaly Memory Archive</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Historical repository of validated and invalidated contract dislocations</p>
+          </div>
+          <input type="text" id="memory-search-input" onkeyup="filterAnomalyMemory(this.value)" placeholder="Search case files..." class="bg-brand-navy-card border border-brand-navy-border rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:border-brand-gold outline-none w-64">
+        </div>
+
+        <div class="space-y-4" id="anomaly-memory-list">
+          <!-- Injected via JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 13: WHAT-IF LAB -->
+      <!-- ========================================================================= -->
+      <section id="view-what-if" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">What-If Laboratory</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Dynamically modify friction assumptions and observe anomaly sensitivity in real-time</p>
+          </div>
+          <button onclick="resetWhatIfParameters()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-navy-card border border-brand-navy-border text-slate-300 text-xs font-mono hover:text-white transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Reset Defaults</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Interactive Sliders (5 cols) -->
+          <div class="lg:col-span-5 glass-panel rounded-2xl p-6 border border-brand-navy-border space-y-5">
+            <h2 class="font-display font-bold text-base text-white">Analytical Parameter Controls</h2>
+
+            <!-- Slider 1: Transaction Cost -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-mono">
+                <span class="text-slate-300">Transaction Cost:</span>
+                <span id="slider-val-tx" class="text-brand-gold font-bold">4.5 bps</span>
+              </div>
+              <input type="range" id="slider-tx" min="1.0" max="15.0" step="0.5" value="4.5" oninput="onWhatIfParamChange()" class="w-full accent-brand-gold bg-brand-navy-border rounded-lg">
+              <p class="text-[10px] text-slate-400 font-mono">Exchange turnover, SEBI fee, clearing, brokerage</p>
+            </div>
+
+            <!-- Slider 2: Bid-Ask Slippage -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-mono">
+                <span class="text-slate-300">Bid-Ask Slippage:</span>
+                <span id="slider-val-slip" class="text-brand-cyan font-bold">6.0 bps</span>
+              </div>
+              <input type="range" id="slider-slip" min="1.0" max="25.0" step="0.5" value="6.0" oninput="onWhatIfParamChange()" class="w-full accent-brand-cyan bg-brand-navy-border rounded-lg">
+              <p class="text-[10px] text-slate-400 font-mono">Execution drag in thinner contracts (e.g. GUINEA, PETAL)</p>
+            </div>
+
+            <!-- Slider 3: Anomaly Z-Threshold -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-mono">
+                <span class="text-slate-300">Anomaly Z-Threshold:</span>
+                <span id="slider-val-z" class="text-rose-400 font-bold">2.0 σ</span>
+              </div>
+              <input type="range" id="slider-z" min="1.0" max="3.5" step="0.1" value="2.0" oninput="onWhatIfParamChange()" class="w-full accent-rose-500 bg-brand-navy-border rounded-lg">
+              <p class="text-[10px] text-slate-400 font-mono">Statistical cutoff for flagging unusual dislocations</p>
+            </div>
+
+            <!-- Slider 4: Lookback Period -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-mono">
+                <span class="text-slate-300">Lookback Baseline:</span>
+                <span id="slider-val-lookback" class="text-purple-400 font-bold">30 Days</span>
+              </div>
+              <input type="range" id="slider-lookback" min="10" max="60" step="5" value="30" oninput="onWhatIfParamChange()" class="w-full accent-purple-500 bg-brand-navy-border rounded-lg">
+              <p class="text-[10px] text-slate-400 font-mono">Rolling window for mean and standard deviation</p>
+            </div>
+          </div>
+
+          <!-- Dynamic Recalculation Results (7 cols) -->
+          <div class="lg:col-span-7 glass-panel rounded-2xl p-6 border border-brand-navy-border space-y-6" id="what-if-results-container">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 14: AI ANALYST (GOLDINTEL ANALYST) -->
+      <!-- ========================================================================= -->
+      <section id="view-ai-analyst" class="view-section hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">GOLDINTEL AI Analyst</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Deterministic analytical explanations grounded strictly in computed metrics</p>
+          </div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-brand-cyan text-xs font-mono">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span>Zero Hallucination • Zero Trading Advice</span>
+          </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl border border-brand-navy-border h-[520px] flex flex-col justify-between overflow-hidden">
+          <!-- Chat Log -->
+          <div id="ai-chat-messages" class="flex-1 p-5 overflow-y-auto space-y-4">
+            <!-- Injected via JS -->
+          </div>
+
+          <!-- Pre-built Question Chips -->
+          <div class="px-5 py-2.5 bg-brand-navy/80 border-t border-brand-navy-border flex items-center gap-2 overflow-x-auto text-[11px] font-mono">
+            <span class="text-slate-400 shrink-0">Quick Queries:</span>
+            <button onclick="askPresetAiQuestion('Why is GOLDM different from GOLDPETAL?')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 border border-brand-navy-border shrink-0 transition">
+              Why is GOLDM different from GOLDPETAL?
+            </button>
+            <button onclick="askPresetAiQuestion('Why did the GOLDGUINEA spread weaken under reality check?')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 border border-brand-navy-border shrink-0 transition">
+              Why did GOLDGUINEA weaken under reality check?
+            </button>
+            <button onclick="askPresetAiQuestion('Explain the purity adjustment factor for GOLDM.')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 border border-brand-navy-border shrink-0 transition">
+              Explain GOLDM purity adjustment
+            </button>
+          </div>
+
+          <!-- Chat Input Bar -->
+          <div class="p-3 bg-brand-navy-surface border-t border-brand-navy-border flex items-center gap-2">
+            <input type="text" id="ai-chat-input" onkeydown="if(event.key==='Enter') sendAiMessage()" placeholder="Ask about contract differences, basis normalization, or walk-forward validation..." class="flex-1 bg-brand-navy-card border border-brand-navy-border rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono focus:border-brand-cyan outline-none">
+            <button onclick="sendAiMessage()" class="px-4 py-2.5 rounded-xl bg-brand-cyan hover:bg-cyan-400 text-brand-navy font-display font-bold text-xs flex items-center gap-1.5 transition">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Ask Analyst</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- VIEW 15: DATA PROVENANCE -->
+      <!-- ========================================================================= -->
+      <section id="view-data-provenance" class="view-section hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">Data Provenance & Audit Trail</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">End-to-end data lineage from MCX Bhavcopy ingestion to final analytical output</p>
+          </div>
+          <button onclick="simulateBhavcopyUpload()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-navy-card border border-brand-navy-border text-slate-200 text-xs font-mono hover:border-brand-gold transition">
+            <i data-lucide="upload" class="w-3.5 h-3.5 text-brand-gold"></i>
+            <span>Simulate MCX Feed Sync</span>
+          </button>
+        </div>
+
+        <!-- Provenance Chain Cards -->
+        <div class="space-y-4" id="provenance-logs-container">
+          <!-- Injected via JS -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: TRANSPARENT CALCULATION INSPECTOR -->
+  <!-- ========================================================================= -->
+  <div id="calculation-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl max-w-2xl w-full border border-brand-gold/40 p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between border-b border-brand-navy-border pb-4">
+        <div class="flex items-center gap-2">
+          <i data-lucide="scale" class="w-5 h-5 text-brand-gold"></i>
+          <h2 class="font-display font-bold text-lg text-white" id="modal-calc-title">Universal Gold Basis Calculation Proof</h2>
+        </div>
+        <button onclick="closeCalculationModal()" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-brand-navy-card">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="modal-calc-body" class="space-y-4 text-xs font-mono text-slate-300">
+        <!-- Injected via JS -->
+      </div>
+
+      <div class="flex justify-end pt-3 border-t border-brand-navy-border">
+        <button onclick="closeCalculationModal()" class="px-4 py-2 rounded-xl bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 text-xs font-mono border border-brand-navy-border transition">
+          Close Inspector
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: FINAL EVIDENCE DOSSIER REPORT -->
+  <!-- ========================================================================= -->
+  <div id="evidence-report-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-brand-gold/40 p-6 sm:p-8 space-y-6 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-brand-navy-border pb-4">
+        <div>
+          <span class="text-[10px] font-mono text-brand-gold uppercase tracking-widest font-bold">Official Analytical Dossier</span>
+          <h2 class="font-display font-black text-xl text-white">GOLDINTEL RELATIONSHIP INVESTIGATION</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.print()" class="px-3 py-1.5 rounded-lg bg-brand-gold text-brand-navy font-bold text-xs flex items-center gap-1.5 shadow-gold-glow">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Print Dossier</span>
+          </button>
+          <button onclick="closeEvidenceReportModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-brand-navy-card">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <div id="evidence-report-content" class="space-y-6 text-xs text-slate-300 font-mono leading-relaxed">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- JUDGE MODE GUIDED TOUR OVERLAY -->
+  <!-- ========================================================================= -->
+  <div id="judge-mode-overlay" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-lg hidden flex flex-col justify-between p-6 sm:p-10 pointer-events-auto">
+    <!-- Top Progress Bar -->
+    <div class="max-w-4xl mx-auto w-full space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-brand-gold animate-ping"></span>
+          <span class="font-display font-bold text-sm text-brand-gold-light tracking-wide">JUDGE MODE — 2-MINUTE INTERACTIVE HACKATHON PITCH</span>
+        </div>
+        <button onclick="exitJudgeMode()" class="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1">
+          <span>Exit Tour</span>
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+      <!-- Step Indicator Bar -->
+      <div class="grid grid-cols-8 gap-1.5 h-2">
+        <div class="judge-step-bar h-full rounded-full bg-brand-gold" id="j-step-1"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-2"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-3"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-4"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-5"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-6"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-7"></div>
+        <div class="judge-step-bar h-full rounded-full bg-brand-navy-border" id="j-step-8"></div>
+      </div>
+    </div>
+
+    <!-- Central Presentation Spotlight Card -->
+    <div class="max-w-3xl mx-auto w-full glass-panel rounded-2xl p-8 border border-brand-gold/50 shadow-gold-glow space-y-6 my-auto">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-gold/20 border border-brand-gold/40 flex items-center justify-center text-brand-gold font-display font-black text-lg" id="judge-step-num">
+          1
+        </div>
+        <div>
+          <span class="text-[10px] font-mono uppercase text-brand-cyan tracking-widest font-bold" id="judge-step-category">STEP 1 OF 8 • PROBLEM & CONTRACT SELECTION</span>
+          <h3 class="font-display font-black text-2xl text-white" id="judge-step-title">Select & Contrast Heterogeneous Gold Contracts</h3>
+        </div>
+      </div>
+
+      <div class="text-sm text-slate-200 font-sans leading-relaxed space-y-3" id="judge-step-body">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Spotlight Highlight Metric Box -->
+      <div class="p-4 rounded-xl bg-brand-navy/90 border border-brand-navy-border font-mono text-xs text-slate-300" id="judge-step-highlight">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+
+    <!-- Bottom Navigation Controls -->
+    <div class="max-w-4xl mx-auto w-full flex items-center justify-between pt-4">
+      <button onclick="prevJudgeStep()" id="judge-prev-btn" class="px-5 py-2.5 rounded-xl bg-brand-navy-card hover:bg-brand-navy-hover border border-brand-navy-border text-slate-300 text-xs font-mono transition">
+        ← Previous Step
+      </button>
+
+      <div class="flex items-center gap-3">
+        <button onclick="toggleJudgeAutoPlay()" id="judge-autoplay-btn" class="px-4 py-2 rounded-xl bg-brand-navy-card border border-brand-navy-border text-slate-300 text-xs font-mono hover:text-white flex items-center gap-1.5">
+          <i data-lucide="play" class="w-3.5 h-3.5 text-brand-gold"></i>
+          <span id="judge-autoplay-label">Auto-Advance (15s)</span>
+        </button>
+
+        <button onclick="nextJudgeStep()" id="judge-next-btn" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-brand-gold-dark text-brand-navy font-display font-bold text-xs tracking-wide shadow-gold-glow hover:brightness-110 transition">
+          Next Step →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN JS APPLICATION LOGIC -->
+  <script src="app.js"></script>
+</body>
+</html>
