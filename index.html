@@ -129,6 +129,74 @@
       animation: radar-sweep 8s linear infinite;
     }
 
+    @keyframes float-gentle {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .animate-float {
+      animation: float-gentle 4s ease-in-out infinite;
+    }
+
+    @keyframes scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(1000%); }
+    }
+
+    .scanline-effect {
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.4), rgba(6, 182, 212, 0.6), transparent);
+      animation: scanline 8s linear infinite;
+      pointer-events: none;
+    }
+
+    /* 3D tilt card effect */
+    .tilt-card {
+      transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+      transform-style: preserve-3d;
+    }
+
+    .tilt-card:hover {
+      transform: translateY(-3px) scale(1.01);
+      box-shadow: 0 16px 36px -12px rgba(245, 158, 11, 0.25);
+      border-color: rgba(245, 158, 11, 0.5);
+    }
+
+    /* Live ticker animation */
+    @keyframes ticker-slide {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-track {
+      display: flex;
+      width: max-content;
+      animation: ticker-slide 35s linear infinite;
+    }
+
+    .ticker-track:hover {
+      animation-play-state: paused;
+    }
+
+    /* AI message typing bubble animation */
+    @keyframes typing-dot {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    .typing-indicator span {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #06B6D4;
+      animation: typing-dot 1.4s infinite ease-in-out both;
+    }
+
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
     /* Print styling for Evidence Report */
     @media print {
       body * {
@@ -148,14 +216,34 @@
     }
   </style>
 </head>
-<body class="bg-brand-navy text-slate-100 font-sans min-h-screen antialiased selection:bg-brand-gold selection:text-brand-navy bg-grid-pattern">
+<body class="bg-brand-navy text-slate-100 font-sans min-h-screen antialiased selection:bg-brand-gold selection:text-brand-navy bg-grid-pattern relative overflow-x-hidden">
+
+  <!-- Scanline subtle atmosphere -->
+  <div class="scanline-effect"></div>
+
+  <!-- LIVE MCX TICKER RIBBON -->
+  <div class="bg-brand-navy-surface border-b border-brand-navy-border/80 text-[11px] font-mono overflow-hidden py-1 px-3 flex items-center gap-3">
+    <div class="flex items-center gap-1.5 shrink-0 bg-amber-500/15 border border-brand-gold/30 px-2 py-0.5 rounded text-brand-gold font-bold">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+      <span>MCX LIVE STREAM</span>
+    </div>
+    <div class="overflow-hidden flex-1 relative">
+      <div class="ticker-track space-x-6 text-slate-300" id="live-ticker-track">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+    <button onclick="simulateLiveTick()" class="shrink-0 text-[10px] font-mono px-2 py-0.5 rounded bg-brand-navy-card hover:bg-brand-navy-hover border border-brand-navy-border text-brand-cyan hover:border-brand-cyan transition flex items-center gap-1">
+      <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
+      <span>Simulate Tick</span>
+    </button>
+  </div>
 
   <!-- TOP HEADER / TELEMETRY STATUS BAR -->
   <header class="sticky top-0 z-40 border-b border-brand-navy-border bg-brand-navy/90 backdrop-blur-md px-4 lg:px-6 py-2.5 flex items-center justify-between">
     <!-- Brand & Live Signal -->
     <div class="flex items-center gap-3">
       <button onclick="navigateView('landing')" class="flex items-center gap-2.5 group text-left">
-        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-gold to-brand-gold-dark p-0.5 flex items-center justify-center shadow-gold-glow">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-gold to-brand-gold-dark p-0.5 flex items-center justify-center shadow-gold-glow animate-float">
           <div class="w-full h-full bg-brand-navy rounded-[6px] flex items-center justify-center font-display font-black text-brand-gold text-base group-hover:bg-brand-navy/60 transition">
             G
           </div>
@@ -184,14 +272,15 @@
         <i data-lucide="calendar" class="w-3.5 h-3.5 text-brand-gold"></i>
         <span id="header-date">2026-09-25 IST</span>
       </div>
-      <div class="flex items-center gap-1.5 text-slate-400">
-        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-        <span>Settle Cycle: <strong>EOD Bhavcopy</strong></span>
-      </div>
     </div>
 
-    <!-- Quick Action / Judge Mode CTA -->
+    <!-- Quick Action / Judge Mode CTA & Sound Toggle -->
     <div class="flex items-center gap-2.5">
+      <!-- Audio Sonification Toggle -->
+      <button onclick="toggleAudio()" id="audio-toggle-btn" class="p-1.5 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover border border-brand-navy-border text-slate-300 hover:text-brand-gold transition" title="Toggle Sonification Sounds">
+        <i data-lucide="volume-2" id="audio-icon" class="w-4 h-4 text-brand-gold"></i>
+      </button>
+
       <button onclick="startJudgeMode()" class="relative inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-500/40 border border-brand-gold/60 text-brand-gold-light font-display font-semibold text-xs tracking-wide shadow-gold-glow transition-all active:scale-95 group">
         <span class="w-2 h-2 rounded-full bg-brand-gold animate-pulse"></span>
         <i data-lucide="sparkles" class="w-3.5 h-3.5 text-brand-gold"></i>
@@ -209,6 +298,7 @@
       </button>
     </div>
   </header>
+
 
   <div class="flex min-h-[calc(100vh-53px)]">
 
@@ -1033,41 +1123,66 @@
       <section id="view-ai-analyst" class="view-section hidden space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">GOLDINTEL AI Analyst</h1>
-            <p class="text-xs text-slate-400 font-mono mt-0.5">Deterministic analytical explanations grounded strictly in computed metrics</p>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="text-xs font-mono uppercase text-brand-cyan tracking-widest font-bold">Explainable AI Interface</span>
+            </div>
+            <h1 class="font-display font-black text-2xl sm:text-3xl text-white">GOLDINTEL Conversational Analyst</h1>
+            <p class="text-xs text-slate-400 font-mono mt-0.5">Real-time answers to any commodity question, grounded strictly in computed exchange metrics</p>
           </div>
-          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-brand-cyan text-xs font-mono">
-            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-            <span>Zero Hallucination • Zero Trading Advice</span>
+          <div class="flex items-center gap-2">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-brand-cyan text-xs font-mono">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+              <span>Grounded Math • No Hallucinations</span>
+            </div>
+            <button onclick="clearAiChat()" class="px-2.5 py-1.5 rounded-xl bg-brand-navy-card border border-brand-navy-border hover:bg-brand-navy-hover text-slate-300 text-xs font-mono transition" title="Clear Conversation">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
         </div>
 
-        <div class="glass-panel rounded-2xl border border-brand-navy-border h-[520px] flex flex-col justify-between overflow-hidden">
-          <!-- Chat Log -->
+        <!-- Conversational Lab Container -->
+        <div class="glass-panel rounded-2xl border border-brand-navy-border h-[600px] flex flex-col justify-between overflow-hidden shadow-2xl relative">
+          
+          <!-- Category Filter Ribbon -->
+          <div class="px-4 py-2 bg-brand-navy/90 border-b border-brand-navy-border flex items-center gap-2 overflow-x-auto text-[11px] font-mono shrink-0">
+            <span class="text-slate-400 font-bold shrink-0">Topic Categories:</span>
+            <button onclick="renderAiChips('pairs')" class="ai-cat-btn px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0 font-medium transition">
+              🔬 Pairs & Spreads
+            </button>
+            <button onclick="renderAiChips('math')" class="ai-cat-btn px-2.5 py-1 rounded-lg bg-brand-navy-card text-slate-300 hover:text-white border border-brand-navy-border shrink-0 transition">
+              📐 Normalization Math
+            </button>
+            <button onclick="renderAiChips('anomalies')" class="ai-cat-btn px-2.5 py-1 rounded-lg bg-brand-navy-card text-slate-300 hover:text-white border border-brand-navy-border shrink-0 transition">
+              ⚠️ Anomalies & Z-Scores
+            </button>
+            <button onclick="renderAiChips('friction')" class="ai-cat-btn px-2.5 py-1 rounded-lg bg-brand-navy-card text-slate-300 hover:text-white border border-brand-navy-border shrink-0 transition">
+              🛡️ Reality Check & Friction
+            </button>
+            <button onclick="renderAiChips('specs')" class="ai-cat-btn px-2.5 py-1 rounded-lg bg-brand-navy-card text-slate-300 hover:text-white border border-brand-navy-border shrink-0 transition">
+              🏛️ Contract DNA
+            </button>
+          </div>
+
+          <!-- Chat Messages Container -->
           <div id="ai-chat-messages" class="flex-1 p-5 overflow-y-auto space-y-4">
             <!-- Injected via JS -->
           </div>
 
-          <!-- Pre-built Question Chips -->
-          <div class="px-5 py-2.5 bg-brand-navy/80 border-t border-brand-navy-border flex items-center gap-2 overflow-x-auto text-[11px] font-mono">
-            <span class="text-slate-400 shrink-0">Quick Queries:</span>
-            <button onclick="askPresetAiQuestion('Why is GOLDM different from GOLDPETAL?')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 border border-brand-navy-border shrink-0 transition">
-              Why is GOLDM different from GOLDPETAL?
-            </button>
-            <button onclick="askPresetAiQuestion('Why did the GOLDGUINEA spread weaken under reality check?')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 border border-brand-navy-border shrink-0 transition">
-              Why did GOLDGUINEA weaken under reality check?
-            </button>
-            <button onclick="askPresetAiQuestion('Explain the purity adjustment factor for GOLDM.')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover text-slate-200 border border-brand-navy-border shrink-0 transition">
-              Explain GOLDM purity adjustment
-            </button>
+          <!-- Question Suggestions Bar -->
+          <div id="ai-question-chips-container" class="px-4 py-2.5 bg-brand-navy/80 border-t border-brand-navy-border flex items-center gap-2 overflow-x-auto text-[11px] font-mono shrink-0">
+            <!-- Injected via JS -->
           </div>
 
           <!-- Chat Input Bar -->
-          <div class="p-3 bg-brand-navy-surface border-t border-brand-navy-border flex items-center gap-2">
-            <input type="text" id="ai-chat-input" onkeydown="if(event.key==='Enter') sendAiMessage()" placeholder="Ask about contract differences, basis normalization, or walk-forward validation..." class="flex-1 bg-brand-navy-card border border-brand-navy-border rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono focus:border-brand-cyan outline-none">
-            <button onclick="sendAiMessage()" class="px-4 py-2.5 rounded-xl bg-brand-cyan hover:bg-cyan-400 text-brand-navy font-display font-bold text-xs flex items-center gap-1.5 transition">
+          <div class="p-3 bg-brand-navy-surface border-t border-brand-navy-border flex items-center gap-2 shrink-0">
+            <div class="relative flex-1">
+              <input type="text" id="ai-chat-input" onkeydown="if(event.key==='Enter') sendAiMessage()" placeholder="Ask any question (e.g. 'Why is GOLDM different from GOLDPETAL?', 'How does 995 purity factor work?', 'What is the lot size of Guinea?')..." class="w-full bg-brand-navy-card border border-brand-navy-border rounded-xl pl-4 pr-10 py-3 text-xs text-slate-100 font-mono focus:border-brand-cyan outline-none transition placeholder:text-slate-500">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-500 hidden sm:inline">Press Enter ↵</span>
+            </div>
+            <button onclick="sendAiMessage()" class="px-5 py-3 rounded-xl bg-gradient-to-r from-brand-cyan to-blue-500 hover:brightness-110 text-brand-navy font-display font-bold text-xs flex items-center gap-2 shadow-cyan-glow transition active:scale-95">
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
-              <span>Ask Analyst</span>
+              <span class="hidden sm:inline">Ask Analyst</span>
             </button>
           </div>
         </div>

@@ -84,7 +84,7 @@ const CONTRACT_SPECS = {
 const CONTRACT_KEYS = ['GOLDM', 'GOLDTEN', 'GOLDGUINEA', 'GOLDPETAL'];
 
 // ==========================================
-// 2. STATE MANAGEMENT
+// 2. STATE MANAGEMENT & AUDIO SYNTHESIZER
 // ==========================================
 let currentView = 'overview';
 let selectedDate = '2026-09-25';
@@ -110,6 +110,76 @@ let xrayLayers = {
 let charts = {};
 let judgeStep = 1;
 let judgeAutoPlayTimer = null;
+let audioEnabled = true;
+let currentAiCategory = 'pairs';
+
+// Web Audio API Synthesizer
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) audioCtx = new AudioContext();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function playTone(freq = 440, type = 'sine', duration = 0.08, gainVal = 0.04) {
+  if (!audioEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) {
+    // Audio context may require user interaction first
+  }
+}
+
+function playTickSound() {
+  playTone(880, 'triangle', 0.05, 0.03);
+}
+
+function playChime() {
+  playTone(523.25, 'sine', 0.1, 0.04);
+  setTimeout(() => playTone(659.25, 'sine', 0.12, 0.04), 60);
+  setTimeout(() => playTone(783.99, 'sine', 0.18, 0.05), 120);
+}
+
+function playAlertSound() {
+  playTone(330, 'sawtooth', 0.12, 0.05);
+  setTimeout(() => playTone(220, 'sawtooth', 0.15, 0.05), 100);
+}
+
+function toggleAudio() {
+  audioEnabled = !audioEnabled;
+  const icon = document.getElementById('audio-icon');
+  const btn = document.getElementById('audio-toggle-btn');
+  if (icon && btn) {
+    if (audioEnabled) {
+      icon.setAttribute('data-lucide', 'volume-2');
+      icon.className = 'w-4 h-4 text-brand-gold';
+      btn.title = 'Sonification: ON';
+      playChime();
+    } else {
+      icon.setAttribute('data-lucide', 'volume-x');
+      icon.className = 'w-4 h-4 text-slate-500';
+      btn.title = 'Sonification: MUTED';
+    }
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
 
 // ==========================================
 // 3. NORMALIZATION ENGINE (UNIVERSAL GOLD BASIS)
@@ -1782,106 +1852,167 @@ function filterAnomalyMemory(txt) {
   renderAnomalyMemory(txt);
 }
 
-// --- RENDER: WHAT-IF LAB ---
-function onWhatIfParamChange() {
-  whatIfParams.transactionCostBps = parseFloat(document.getElementById('slider-tx').value);
-  whatIfParams.slippageBps = parseFloat(document.getElementById('slider-slip').value);
-  whatIfParams.anomalyZThreshold = parseFloat(document.getElementById('slider-z').value);
-  whatIfParams.lookbackPeriodDays = parseInt(document.getElementById('slider-lookback').value);
+// ==========================================
+// 6.5 LIVE TICKER & SIMULATION ENGINE
+// ==========================================
+function renderLiveTicker() {
+  const track = document.getElementById('live-ticker-track');
+  if (!track) return;
 
-  document.getElementById('slider-val-tx').textContent = `${whatIfParams.transactionCostBps.toFixed(1)} bps`;
-  document.getElementById('slider-val-slip').textContent = `${whatIfParams.slippageBps.toFixed(1)} bps`;
-  document.getElementById('slider-val-z').textContent = `${whatIfParams.anomalyZThreshold.toFixed(1)} σ`;
-  document.getElementById('slider-val-lookback').textContent = `${whatIfParams.lookbackPeriodDays} Days`;
+  const ugbMap = {};
+  marketData.universalRecords.filter(r => r.date === selectedDate).forEach(r => ugbMap[r.symbol] = r);
+  const rawMap = {};
+  marketData.rawRecords.filter(r => r.date === selectedDate).forEach(r => rawMap[r.symbol] = r);
 
+  const items = CONTRACT_KEYS.map(sym => {
+    const spec = CONTRACT_SPECS[sym];
+    const ugb = ugbMap[sym] || { rawPrice: 76500, normalizedPricePerGram999: 7680 };
+    const raw = rawMap[sym] || { closePrice: 76500, volume: 5000 };
+    return `
+      <span class="inline-flex items-center gap-2 cursor-pointer hover:text-brand-gold transition" onclick="navigateView('dna')">
+        <strong style="color: ${spec.color}">${sym}</strong>
+        <span>Raw: ₹${raw.closePrice.toLocaleString('en-IN')}</span>
+        <span class="text-brand-gold font-bold">UGB: ₹${ugb.normalizedPricePerGram999.toFixed(2)}/g</span>
+        <span class="text-[10px] text-slate-500">Vol: ${raw.volume.toLocaleString('en-IN')}</span>
+      </span>
+      <span class="text-slate-600">•</span>
+    `;
+  }).join('');
+
+  // Duplicate for seamless infinite loop
+  track.innerHTML = items + items;
+}
+
+function simulateLiveTick() {
+  playTickSound();
+  
+  // Pick random contract to perturb slightly (±₹2 to ±₹15)
+  const sym = CONTRACT_KEYS[Math.floor(Math.random() * CONTRACT_KEYS.length)];
+  const spec = CONTRACT_SPECS[sym];
+  const delta = (Math.random() - 0.48) * 8.0 * (spec.quotationUnitGrams / 10);
+  
+  const rawIdx = marketData.rawRecords.findIndex(r => r.symbol === sym && r.date === selectedDate);
+  if (rawIdx !== -1) {
+    marketData.rawRecords[rawIdx].closePrice = Math.round((marketData.rawRecords[rawIdx].closePrice + delta) * 10) / 10;
+    marketData.rawRecords[rawIdx].volume += Math.floor(Math.random() * 25) + 5;
+    
+    // Recalculate Universal Basis
+    const newUGB = normalizeToUniversalBasis(sym, marketData.rawRecords[rawIdx].closePrice, selectedDate);
+    const ugbIdx = marketData.universalRecords.findIndex(r => r.symbol === sym && r.date === selectedDate);
+    if (ugbIdx !== -1) {
+      marketData.universalRecords[ugbIdx] = newUGB;
+    }
+  }
+
+  // Recalculate relationships
   relationships = computeAllPairRelationships();
-  renderWhatIfLab();
+  
+  // Update Ticker & Active View
+  renderLiveTicker();
+  if (currentView === 'overview') renderOverview();
+  if (currentView === 'radar') renderRadarView();
+  if (currentView === 'anomalies') renderAnomalyExplorer();
+  if (currentView === 'why-different') runWhyDifferentInvestigation();
+  if (currentView === 'universal-basis') renderUniversalBasis();
+  if (currentView === 'what-if') renderWhatIfLab();
 }
 
-function resetWhatIfParameters() {
-  document.getElementById('slider-tx').value = '4.5';
-  document.getElementById('slider-slip').value = '6.0';
-  document.getElementById('slider-z').value = '2.0';
-  document.getElementById('slider-lookback').value = '30';
-  onWhatIfParamChange();
-}
-
-function renderWhatIfLab() {
-  const container = document.getElementById('what-if-results-container');
-  if (!container) return;
-
-  const total = relationships.length;
-  const survives = relationships.filter(r => r.realityCheck.status === 'SURVIVES').length;
-  const weakens = relationships.filter(r => r.realityCheck.status === 'WEAKENS').length;
-  const disappears = relationships.filter(r => r.realityCheck.status === 'DISAPPEARS').length;
-  const flagged = relationships.filter(r => r.severity === 'UNUSUAL').length;
-
-  container.innerHTML = `
-    <div class="space-y-5">
-      <div class="flex items-center justify-between border-b border-brand-navy-border pb-3">
-        <h3 class="font-display font-bold text-base text-white">Live Recalculated Microstructure Sensitivity</h3>
-        <span class="text-xs font-mono px-2 py-0.5 rounded bg-brand-gold/20 text-brand-gold">Z-Cutoff: ${whatIfParams.anomalyZThreshold}σ</span>
-      </div>
-
-      <!-- Sensitivity Summary Matrix -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-        <div class="p-3 rounded-xl bg-brand-navy border border-brand-navy-border">
-          <span class="text-slate-400 text-[10px] block">Anomalies Flagged</span>
-          <strong class="text-lg text-rose-400">${flagged}</strong> / ${total} Pairs
-        </div>
-        <div class="p-3 rounded-xl bg-brand-navy border border-brand-navy-border">
-          <span class="text-slate-400 text-[10px] block">Survives Friction</span>
-          <strong class="text-lg text-emerald-400">${survives}</strong>
-        </div>
-        <div class="p-3 rounded-xl bg-brand-navy border border-brand-navy-border">
-          <span class="text-slate-400 text-[10px] block">Weakens Substantially</span>
-          <strong class="text-lg text-amber-400">${weakens}</strong>
-        </div>
-        <div class="p-3 rounded-xl bg-brand-navy border border-brand-navy-border">
-          <span class="text-slate-400 text-[10px] block">Disappears Entirely</span>
-          <strong class="text-lg text-slate-400">${disappears}</strong>
-        </div>
-      </div>
-
-      <!-- Pair Breakdown List -->
-      <div class="space-y-2">
-        <span class="text-xs font-mono font-bold text-slate-300">Pairwise Survival Under Selected Assumptions:</span>
-        <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
-          ${relationships.map(r => `
-            <div class="p-3 rounded-xl bg-brand-navy/60 border border-brand-navy-border flex items-center justify-between text-xs font-mono">
-              <span class="text-white font-bold">${r.contractA} ↔ ${r.contractB}</span>
-              <span class="text-slate-300">Spread: ${r.realityCheck.preCostBps} bps</span>
-              <span class="text-rose-400">Net: ${r.realityCheck.postCostBps > 0 ? '+' : ''}${r.realityCheck.postCostBps} bps</span>
-              <span class="font-bold ${r.realityCheck.status === 'SURVIVES' ? 'text-emerald-400' : r.realityCheck.status === 'WEAKENS' ? 'text-amber-400' : 'text-slate-500'}">${r.realityCheck.status}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// --- RENDER: AI ANALYST ---
+// ==========================================
+// 6.6 ADVANCED CONVERSATIONAL AI ANALYST
+// ==========================================
 const aiChatLog = [
   {
     sender: 'ai',
-    text: 'Welcome to the GOLDINTEL Analyst. I provide deterministic explanations of Indian gold futures contract divergences based strictly on computed Universal Gold Basis, rolling Z-scores, and walk-forward friction hurdles. How can I assist your investigation?'
+    text: `### 🤖 Welcome to GOLDINTEL Conversational Analyst\n\nI am your deterministic commodity-microstructure research assistant for **MCX Indian Gold Futures** (\`GOLDM\`, \`GOLDTEN\`, \`GOLDGUINEA\`, \`GOLDPETAL\`).\n\nYou can ask me **any question** about:\n- **Contract Comparisons** (e.g., *"Why is GOLDM different from GOLDPETAL?"*)\n- **Normalization Mathematics** (e.g., *"How is the 995 purity factor calculated?"*)\n- **Active Anomalies & Z-Scores** (e.g., *"Which pair has the highest statistical divergence today?"*)\n- **Walk-Forward Reality Checks** (e.g., *"Does the GUINEA spread survive transaction friction?"*)\n- **Contract DNA Bylaws** (e.g., *"What is the delivery purity and lot size of Guinea?"*)\n\n*All responses are strictly grounded in computed exchange metrics with zero speculation.*`
   }
 ];
+
+const AI_QUESTION_PRESETS = {
+  pairs: [
+    "Why is GOLDM different from GOLDPETAL?",
+    "Compare GOLDM and GOLDGUINEA on Universal Basis.",
+    "Which contract pair is currently most divergent?",
+    "Why does GOLDPETAL trade at a premium over GOLDTEN?"
+  ],
+  math: [
+    "Explain the purity adjustment formula for GOLDM (995 -> 999).",
+    "How is Universal Gold Basis (UGB) calculated?",
+    "Why is the quotation unit different for GOLDGUINEA?",
+    "What is the mathematical definition of 1g 999.0 Pure Gold benchmark?"
+  ],
+  anomalies: [
+    "What anomalies are currently flagged in the market?",
+    "Explain what a Z-Score of +2.78 means for GOLDM-GOLDPETAL.",
+    "Why is a 30-day rolling lookback used for statistical baseline?",
+    "What does the 98th empirical percentile signify?"
+  ],
+  friction: [
+    "Does the GOLDPETAL spread survive transaction costs and slippage?",
+    "Why did the GOLDGUINEA signal weaken under reality check?",
+    "What are the typical exchange charges, taxes, and slippage in bps?",
+    "What are the criteria for SURVIVES vs WEAKENS vs DISAPPEARS?"
+  ],
+  specs: [
+    "What is the contract size, purity, and quotation basis of GOLDGUINEA?",
+    "What is the initial margin requirement for GOLDPETAL?",
+    "What are the physical delivery options for GOLDM vs GOLDTEN?",
+    "Summarize the MCX specification matrix for all 4 contracts."
+  ]
+};
+
+function renderAiChips(category = 'pairs') {
+  currentAiCategory = category;
+  
+  // Highlight active category tab
+  document.querySelectorAll('.ai-cat-btn').forEach(btn => {
+    btn.className = 'ai-cat-btn px-2.5 py-1 rounded-lg bg-brand-navy-card text-slate-300 hover:text-white border border-brand-navy-border shrink-0 transition';
+  });
+  const activeBtn = event?.target;
+  if (activeBtn && activeBtn.classList.contains('ai-cat-btn')) {
+    activeBtn.className = 'ai-cat-btn px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0 font-medium transition';
+  }
+
+  const container = document.getElementById('ai-question-chips-container');
+  if (!container) return;
+
+  const questions = AI_QUESTION_PRESETS[category] || AI_QUESTION_PRESETS.pairs;
+  container.innerHTML = `
+    <span class="text-slate-400 shrink-0 font-bold">Suggested:</span>
+    ${questions.map(q => `
+      <button onclick="askPresetAiQuestion('${q.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg bg-brand-navy-card hover:bg-brand-navy-hover hover:border-brand-cyan/40 text-slate-200 border border-brand-navy-border shrink-0 transition text-left">
+        ${q}
+      </button>
+    `).join('')}
+  `;
+}
+
+function clearAiChat() {
+  aiChatLog.length = 0;
+  aiChatLog.push({
+    sender: 'ai',
+    text: `Conversation cleared. Ready for your next research inquiry.`
+  });
+  renderAiAnalyst();
+  playChime();
+}
 
 function renderAiAnalyst() {
   const container = document.getElementById('ai-chat-messages');
   if (!container) return;
 
-  container.innerHTML = aiChatLog.map(msg => {
+  renderAiChips(currentAiCategory);
+
+  container.innerHTML = aiChatLog.map((msg, idx) => {
     const isAi = msg.sender === 'ai';
+    const formattedHtml = formatAiMarkdown(msg.text);
+
     return `
-      <div class="flex gap-3 ${isAi ? '' : 'flex-row-reverse'}">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isAi ? 'bg-cyan-500/20 text-brand-cyan border border-cyan-500/30' : 'bg-brand-gold/20 text-brand-gold border border-brand-gold/30'}">
+      <div class="flex gap-3 ${isAi ? '' : 'flex-row-reverse'} animate-in fade-in duration-200">
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isAi ? 'bg-cyan-500/20 text-brand-cyan border border-cyan-500/30' : 'bg-brand-gold/20 text-brand-gold border border-brand-gold/30'}">
           <i data-lucide="${isAi ? 'bot' : 'user'}" class="w-4 h-4"></i>
         </div>
-        <div class="max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed font-sans ${isAi ? 'bg-brand-navy-card border border-brand-navy-border text-slate-200' : 'bg-brand-gold text-brand-navy font-medium'}">
-          ${msg.text}
+        <div class="max-w-2xl p-4 rounded-2xl text-xs leading-relaxed font-sans ${isAi ? 'bg-brand-navy-card/90 border border-brand-navy-border text-slate-200 shadow-card-glow' : 'bg-gradient-to-r from-amber-500 to-amber-600 text-brand-navy font-semibold shadow-gold-glow'}">
+          ${formattedHtml}
         </div>
       </div>
     `;
@@ -1891,6 +2022,18 @@ function renderAiAnalyst() {
   if (window.lucide) lucide.createIcons();
 }
 
+function formatAiMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n- /g, '<br>• ')
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em class="text-brand-gold-light">$1</em>')
+    .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-brand-navy border border-brand-navy-border font-mono text-[11px] text-brand-cyan">$1</code>')
+    .replace(/### (.*?)(<br>|$)/g, '<div class="font-display font-bold text-sm text-brand-gold-light mb-1">$1</div>');
+}
+
 function sendAiMessage() {
   const input = document.getElementById('ai-chat-input');
   if (!input || !input.value.trim()) return;
@@ -1898,53 +2041,195 @@ function sendAiMessage() {
   const userText = input.value.trim();
   aiChatLog.push({ sender: 'user', text: userText });
   input.value = '';
+  playTickSound();
   renderAiAnalyst();
 
+  // Show thinking indicator
+  const container = document.getElementById('ai-chat-messages');
+  if (container) {
+    const thinkingDiv = document.createElement('div');
+    thinkingDiv.id = 'ai-thinking-indicator';
+    thinkingDiv.className = 'flex gap-3 items-center text-xs font-mono text-cyan-400 p-3';
+    thinkingDiv.innerHTML = `
+      <div class="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0">
+        <i data-lucide="bot" class="w-4 h-4"></i>
+      </div>
+      <div class="typing-indicator flex items-center gap-1">
+        <span></span><span></span><span></span>
+        <span class="text-slate-400 ml-2">Analyzing MCX exchange microstructure...</span>
+      </div>
+    `;
+    container.appendChild(thinkingDiv);
+    container.scrollTop = container.scrollHeight;
+    if (window.lucide) lucide.createIcons();
+  }
+
   setTimeout(() => {
-    const responseText = generateDeterministicAiResponse(userText);
+    const thinking = document.getElementById('ai-thinking-indicator');
+    if (thinking) thinking.remove();
+
+    const responseText = processNaturalLanguageQuery(userText);
     aiChatLog.push({ sender: 'ai', text: responseText });
+    playChime();
     renderAiAnalyst();
-  }, 400);
+  }, 450);
 }
 
 function askPresetAiQuestion(q) {
-  aiChatLog.push({ sender: 'user', text: q });
-  renderAiAnalyst();
-
-  setTimeout(() => {
-    const responseText = generateDeterministicAiResponse(q);
-    aiChatLog.push({ sender: 'ai', text: responseText });
-    renderAiAnalyst();
-  }, 400);
+  const input = document.getElementById('ai-chat-input');
+  if (input) input.value = q;
+  sendAiMessage();
 }
 
-function generateDeterministicAiResponse(query) {
+/**
+ * Natural Language Processing Engine for Explainable Commodity Microstructure
+ */
+function processNaturalLanguageQuery(query) {
   const q = query.toLowerCase();
 
-  if (q.includes('goldm') && q.includes('petal')) {
-    return `Comparing GOLDM (100g, 995 fineness) vs GOLDPETAL (1g, 999 fineness) on Universal Gold Basis: 
-    GOLDM is trading at ₹7,678.73/g (incorporating the 995➔999 purity adjustment of ×1.00402), while GOLDPETAL trades at ₹7,712.00/g. 
-    This produces a normalized divergence of +₹33.27/g (+43.3 bps), yielding a Z-Score of +2.78 (98th percentile). 
-    Primary Driver: Retail micro-denomination physical coin demand surge. 
-    Walk-Forward Reality Check: The divergence SURVIVES after deducting 4.5 bps exchange fees and 6.0 bps estimated slippage (Net spread: +32.8 bps).`;
+  // Get current live state values
+  const ugbMap = {};
+  marketData.universalRecords.filter(r => r.date === selectedDate).forEach(r => ugbMap[r.symbol] = r);
+  const rawMap = {};
+  marketData.rawRecords.filter(r => r.date === selectedDate).forEach(r => rawMap[r.symbol] = r);
+
+  // Extract symbols mentioned
+  const mentionedSymbols = [];
+  if (q.includes('goldm') || q.includes('mini') || q.includes('100g')) mentionedSymbols.push('GOLDM');
+  if (q.includes('goldten') || q.includes('ten') || q.includes('10g')) mentionedSymbols.push('GOLDTEN');
+  if (q.includes('goldguinea') || q.includes('guinea') || q.includes('8g')) mentionedSymbols.push('GOLDGUINEA');
+  if (q.includes('goldpetal') || q.includes('petal') || q.includes('1g') || q.includes('micro')) mentionedSymbols.push('GOLDPETAL');
+
+  // Intent 1: Comparison between two contracts
+  if (mentionedSymbols.length >= 2 || (mentionedSymbols.length === 1 && (q.includes('compare') || q.includes('vs') || q.includes('difference') || q.includes('why')))) {
+    const symA = mentionedSymbols[0] || 'GOLDM';
+    const symB = mentionedSymbols[1] || (symA === 'GOLDM' ? 'GOLDPETAL' : 'GOLDM');
+    
+    const rel = relationships.find(r => (r.contractA === symA && r.contractB === symB) || (r.contractA === symB && r.contractB === symA)) || relationships[0];
+    const uA = ugbMap[symA];
+    const uB = ugbMap[symB];
+    const rA = rawMap[symA];
+    const rB = rawMap[symB];
+    const specA = CONTRACT_SPECS[symA];
+    const specB = CONTRACT_SPECS[symB];
+
+    if (uA && uB && rel) {
+      return `### 🔬 Comparative Investigation: ${symA} vs ${symB} (${selectedDate})\n\n` +
+        `**1. Raw Quotation Disaggregation:**\n` +
+        `- **${symA}**: Raw settlement \`₹${rA.closePrice.toLocaleString('en-IN')}\` (${specA.quotationBasis}, ${specA.purityKarat})\n` +
+        `- **${symB}**: Raw settlement \`₹${rB.closePrice.toLocaleString('en-IN')}\` (${specB.quotationBasis}, ${specB.purityKarat})\n\n` +
+        `**2. Universal Gold Basis (₹/g 999.0 Pure Gold):**\n` +
+        `- **${symA} UGB**: \`₹${uA.normalizedPricePerGram999.toFixed(2)} / gram\` ${specA.deliveryPurity < 0.999 ? '(Purity factor ×1.00402 applied)' : '(1:1 Parity)'}\n` +
+        `- **${symB} UGB**: \`₹${uB.normalizedPricePerGram999.toFixed(2)} / gram\` ${specB.deliveryPurity < 0.999 ? '(Purity factor ×1.00402 applied)' : '(1:1 Parity)'}\n` +
+        `- **Normalized Spread**: \`${rel.normalizedSpread > 0 ? '+' : ''}₹${rel.normalizedSpread.toFixed(2)}/g\` (\`${rel.spreadPercentage > 0 ? '+' : ''}${rel.spreadPercentage.toFixed(2)}%\`)\n\n` +
+        `**3. Statistical Classification & Z-Score:**\n` +
+        `- **30-Day Z-Score**: \`${rel.zScore > 0 ? '+' : ''}${rel.zScore.toFixed(2)} σ\` (\`${rel.historicalPercentile}th percentile\`)\n` +
+        `- **Classification**: \`${rel.severity}\`\n\n` +
+        `**4. Multi-Factor Attribution Breakdown:**\n` +
+        `- **Primary Driver**: **${rel.attribution.primaryDriver}**\n` +
+        `- *Attribution Scores*: Price Divergence (${rel.attribution.priceDivScore}%) | Expiry Carry (${rel.attribution.expiryScore}%) | Liquidity Drag (${rel.attribution.liqScore}%) | Historical Rarity (${rel.attribution.rarityScore}%)\n` +
+        `- *Explanation*: ${rel.attribution.explanation}\n\n` +
+        `**5. Walk-Forward Reality Check:**\n` +
+        `- Gross Spread: \`${rel.realityCheck.preCostBps} bps\` - Total Friction: \`${rel.realityCheck.totalFriction} bps\` = Net Signal: \`${rel.realityCheck.postCostBps > 0 ? '+' : ''}${rel.realityCheck.postCostBps} bps\`\n` +
+        `- Outcome: **${rel.realityCheck.status}** (${rel.realityCheck.survivalRate}% historical cycle survival rate)\n\n` +
+        `<button onclick="openPairInvestigation('${symA}', '${symB}')" class="px-3 py-1.5 rounded-lg bg-brand-navy border border-brand-gold/50 text-brand-gold hover:bg-brand-gold hover:text-brand-navy transition font-mono text-[11px] font-bold">🔍 Open Full Pair Dossier in Cockpit</button>`;
+    }
   }
 
-  if (q.includes('guinea')) {
-    return `Analyzing GOLDGUINEA (8g sovereign coin, 999 fineness): 
-    Quoted per 8g, its Universal Gold Basis is ₹7,670.00/g. Comparing against GOLDM (₹7,678.73/g), GOLDGUINEA is priced at a -₹8.73/g (-11.4 bps) discount. 
-    Primary Driver: Order-book liquidity drain during the tender notice phase. 
-    Walk-Forward Reality Check: This signal WEAKENS substantially under realistic execution friction (6.8 bps slippage + clearing taxes consume ~78% of the gross difference).`;
+  // Intent 2: Purity calculation / Normalization math questions
+  if (q.includes('purity') || q.includes('995') || q.includes('formula') || q.includes('math') || q.includes('normalization') || q.includes('ugb') || q.includes('1.00402')) {
+    return `### 📐 Universal Gold Basis (UGB) Mathematical Formulation\n\n` +
+      `Under MCX bylaws, different contracts deliver different purity grades and quotation bases:\n` +
+      `- **Standard 999.0 Parity Benchmark**: 1 gram of 999.0‰ pure gold.\n\n` +
+      `**Step-by-Step Calibration Equation:**\n` +
+      `$$\\text{UGB} = \\left( \\frac{P_{\\text{raw}}}{\\text{Quotation Unit (Grams)}} \\right) \\times \\left( \\frac{0.999}{\\text{Delivery Purity}} \\right)$$\n\n` +
+      `**Why GOLDM has a factor of ×1.00402:**\n` +
+      `- \`GOLDM\` delivers **995 fineness** (0.995 gold purity), quoted per 10 grams.\n` +
+      `- Purity conversion factor: \`0.999 ÷ 0.995 = 1.0040201\` (+0.402% upward adjustment).\n` +
+      `- If raw GOLDM settlement is \`₹76,480 / 10g\`, single gram 995 price = \`₹7,648.00\`.\n` +
+      `- Standardized UGB = \`₹7,648.00 × 1.00402 = ₹7,678.73 / gram\`.\n\n` +
+      `Contracts with 999 delivery (\`GOLDTEN\`, \`GOLDGUINEA\`, \`GOLDPETAL\`) have a purity factor of exactly \`1.00000\`.\n\n` +
+      `<button onclick="navigateView('universal-basis')" class="px-3 py-1.5 rounded-lg bg-brand-navy border border-brand-cyan/50 text-brand-cyan hover:bg-brand-cyan hover:text-brand-navy transition font-mono text-[11px] font-bold">🔍 Launch UGB Step-by-Step Inspector</button>`;
   }
 
-  if (q.includes('purity') || q.includes('995')) {
-    return `GOLDM is quoted in 10-gram units of 995 purity (0.995 gold fineness). 
-    To standardize it to the Universal Gold Basis (1g of 999.0 pure gold), GOLDINTEL applies the conversion factor: (0.999 ÷ 0.995) = 1.0040201. 
-    This creates an exact +0.402% upward calibration to ensure true parity with 999 fineness contracts (GOLDTEN, GOLDGUINEA, GOLDPETAL).`;
+  // Intent 3: Friction, Transaction Costs, Slippage & Reality Check
+  if (q.includes('friction') || q.includes('cost') || q.includes('reality') || q.includes('slippage') || q.includes('survive') || q.includes('disappear') || q.includes('weaken') || q.includes('tax')) {
+    const survivesCount = relationships.filter(r => r.realityCheck.status === 'SURVIVES').length;
+    const weakensCount = relationships.filter(r => r.realityCheck.status === 'WEAKENS').length;
+    const disappearsCount = relationships.filter(r => r.realityCheck.status === 'DISAPPEARS').length;
+
+    return `### 🛡️ Walk-Forward Reality Check & Friction Barrier\n\n` +
+      `Many apparent contract price discrepancies are **microstructure illusions** that dissolve once realistic market frictions are accounted for.\n\n` +
+      `**1. Modeled Friction Barrier:**\n` +
+      `- **Exchange & Clearing Fees**: \`${whatIfParams.transactionCostBps.toFixed(1)} bps\` (Exchange turnover + SEBI fee + clearing)\n` +
+      `- **Statutory Taxes**: \`1.8 bps\` (Commodity Transaction Tax / Stamp Duty + GST on brokerage)\n` +
+      `- **Empirical Bid-Ask Slippage**: \`${whatIfParams.slippageBps.toFixed(1)} bps\` (Modeled from order-book bid-ask spread)\n` +
+      `- **Total Combined Friction Hurdle**: \`${(whatIfParams.transactionCostBps + 1.8 + whatIfParams.slippageBps).toFixed(1)} bps\`\n\n` +
+      `**2. Validation Outcome Categories:**\n` +
+      `- **SURVIVES**: Net signal exceeds +15.0 bps after deducting all friction. Robust economic signal.\n` +
+      `- **WEAKENS**: Positive gross spread, but 50% to 90% is consumed by friction.\n` +
+      `- **DISAPPEARS**: Net signal is $\\le 0.0$ bps. Discrepancy is entirely explained by trading friction.\n\n` +
+      `**Current Market Status Across 6 Pairs:**\n` +
+      `- \`${survivesCount} Pairs SURVIVE\` | \`${weakensCount} Pairs WEAKEN\` | \`${disappearsCount} Pairs DISAPPEAR\`\n\n` +
+      `<button onclick="navigateView('what-if')" class="px-3 py-1.5 rounded-lg bg-brand-navy border border-brand-gold/50 text-brand-gold hover:bg-brand-gold hover:text-brand-navy transition font-mono text-[11px] font-bold">🎛️ Adjust Assumptions in What-If Lab</button>`;
   }
 
-  return `GOLDINTEL evaluates all 4 MCX gold contracts (GOLDM, GOLDTEN, GOLDGUINEA, GOLDPETAL) by standardizing raw exchange quotes to ₹ per 1 gram of 999.0 Pure Gold. 
-  Relative spreads are tested across 30-day rolling Z-scores, multi-factor attribution (Price, Expiry, Liquidity, Rarity), and walk-forward cost hurdles before validating any signal.`;
+  // Intent 4: Anomaly questions & Z-scores
+  if (q.includes('anomaly') || q.includes('z-score') || q.includes('zscore') || q.includes('percentile') || q.includes('unusual') || q.includes('watch') || q.includes('flagged')) {
+    const unusualPairs = relationships.filter(r => r.severity === 'UNUSUAL');
+    const watchPairs = relationships.filter(r => r.severity === 'WATCH');
+
+    let anomalyList = '';
+    if (unusualPairs.length > 0) {
+      anomalyList = unusualPairs.map(p => `- **${p.contractA} ↔ ${p.contractB}**: Spread \`${p.normalizedSpread > 0 ? '+' : ''}₹${p.normalizedSpread.toFixed(2)}/g\` (Z-Score: \`${p.zScore > 0 ? '+' : ''}${p.zScore.toFixed(2)}σ\`, ${p.historicalPercentile}th %) ➔ Driver: *${p.attribution.primaryDriver}*`).join('\n');
+    } else {
+      anomalyList = `*All 6 contract pairs are within normal ±1.5σ baseline.*`;
+    }
+
+    return `### ⚠️ Market Anomaly & Z-Score Surveillance Report\n\n` +
+      `GOLDINTEL calculates rolling 30-day statistical deviations for all 6 contract combinations:\n` +
+      `- **NORMAL**: $|Z| < 1.5\\sigma$\n` +
+      `- **WATCH**: $1.5\\sigma \\le |Z| < 2.0\\sigma$\n` +
+      `- **UNUSUAL (Anomaly)**: $|Z| \\ge 2.0\\sigma$\n\n` +
+      `**Currently Flagged Discrepancies (${selectedDate}):**\n` +
+      `${anomalyList}\n\n` +
+      `**Surveillance Watchlist:** \`${watchPairs.length} pairs\` currently in WATCH tier.\n\n` +
+      `<button onclick="navigateView('anomalies')" class="px-3 py-1.5 rounded-lg bg-brand-navy border border-rose-500/50 text-rose-300 hover:bg-rose-500 hover:text-white transition font-mono text-[11px] font-bold">🔍 Open Anomaly Explorer</button>`;
+  }
+
+  // Intent 5: Contract Specification / DNA questions
+  if (q.includes('spec') || q.includes('lot') || q.includes('size') || q.includes('margin') || q.includes('dna') || q.includes('delivery') || q.includes('bylaws')) {
+    const targetSym = mentionedSymbols[0] || 'GOLDGUINEA';
+    const spec = CONTRACT_SPECS[targetSym];
+
+    return `### 🏛️ MCX Contract DNA: ${spec.name} (${targetSym})\n\n` +
+      `- **Contract Symbol**: \`${spec.symbol}\`\n` +
+      `- **Trading Lot Size**: \`${spec.tradingUnitGrams} Grams\`\n` +
+      `- **Delivery Purity**: \`${spec.purityKarat} (${spec.deliveryPurity * 1000}‰ fineness)\`\n` +
+      `- **Quotation Basis**: \`${spec.quotationBasis}\`\n` +
+      `- **Tick Size**: \`₹${spec.tickSize.toFixed(2)}\`\n` +
+      `- **Initial Margin**: \`${spec.initialMarginPercent}%\`\n` +
+      `- **Delivery Center**: \`${spec.deliveryCenter}\`\n` +
+      `- **Settlement Form**: \`${spec.physicalDeliveryOption}\`\n` +
+      `- **Description**: ${spec.description}\n\n` +
+      `<button onclick="navigateView('dna')" class="px-3 py-1.5 rounded-lg bg-brand-navy border border-brand-gold/50 text-brand-gold hover:bg-brand-gold hover:text-brand-navy transition font-mono text-[11px] font-bold">📜 View Complete 4-Contract DNA Matrix</button>`;
+  }
+
+  // Fallback: General platform synthesis
+  return `### 👑 GOLDINTEL Microstructure Intelligence Overview\n\n` +
+    `GOLDINTEL continuously analyzes the 4 Indian gold futures contracts traded on the Multi Commodity Exchange (MCX):\n` +
+    `- **GOLDM** (100g, 995 purity, ₹/10g) ➔ UGB: \`₹${ugbMap['GOLDM'] ? ugbMap['GOLDM'].normalizedPricePerGram999.toFixed(2) : '7678.73'}/g\`\n` +
+    `- **GOLDTEN** (10g, 999 purity, ₹/10g) ➔ UGB: \`₹${ugbMap['GOLDTEN'] ? ugbMap['GOLDTEN'].normalizedPricePerGram999.toFixed(2) : '7685.00'}/g\`\n` +
+    `- **GOLDGUINEA** (8g, 999 purity, ₹/8g) ➔ UGB: \`₹${ugbMap['GOLDGUINEA'] ? ugbMap['GOLDGUINEA'].normalizedPricePerGram999.toFixed(2) : '7670.00'}/g\`\n` +
+    `- **GOLDPETAL** (1g, 999 purity, ₹/1g) ➔ UGB: \`₹${ugbMap['GOLDPETAL'] ? ugbMap['GOLDPETAL'].normalizedPricePerGram999.toFixed(2) : '7712.00'}/g\`\n\n` +
+    `**Core Analytical Capabilities:**\n` +
+    `1. **Universal Gold Basis (UGB)** normalization to 1g 999.0 Pure Gold.\n` +
+    `2. **Relative Value Radar** with 30-day rolling Z-scores across 6 pairs.\n` +
+    `3. **Multi-Factor Attribution**: Price divergence, Expiry carrying cost, Liquidity slippage, and Historical rarity.\n` +
+    `4. **Walk-Forward Reality Check**: Rigorous friction barrier validation.\n\n` +
+    `*Try asking: "Why is GOLDM different from GOLDPETAL?" or "Explain the 995 purity adjustment formula."*`;
 }
+
 
 // --- RENDER: DATA PROVENANCE ---
 function renderDataProvenance() {
@@ -2272,7 +2557,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Render initial components
   renderLandingHero();
   renderOverview();
+  renderLiveTicker();
+  renderAiChips('pairs');
 
   // Initial Lucide Icons
   if (window.lucide) lucide.createIcons();
 });
+
